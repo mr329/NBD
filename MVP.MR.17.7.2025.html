@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Nature-Based Design Explorer</title>
+    <style>
+        :root {
+            --bg-light: #f9fafb;
+            --bg-white: #ffffff;
+            --border-color: #e5e7eb;
+            --text-primary: #1f2937;
+            --text-secondary: #4b5563;
+            --brand-blue: #3b82f6;
+            --brand-blue-dark: #2563eb;
+            --brand-green: #10b981;
+            --brand-purple: #8b5cf6;
+            --link-color: #9ca3af;
+            --link-highlight: #3b82f6;
+        }
+        body, html {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: var(--bg-light);
+            color: var(--text-primary);
+            height: 100%;
+            overflow: hidden;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: bold;
+            margin: 0 0 0.5rem 0;
+            background: linear-gradient(135deg, var(--brand-blue), var(--brand-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .controls-panel {
+            background-color: var(--bg-white);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .controls-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1rem;
+            align-items: center;
+        }
+        .filters-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 1rem;
+            padding: 0.75rem;
+            background-color: #f8fafc;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+            align-items: start;
+        }
+        .main-content {
+            display: flex;
+            gap: 1rem;
+            flex-grow: 1;
+            min-height: 0;
+        }
+        .visualization-container {
+            flex-grow: 1;
+            background-color: var(--bg-white);
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+        .info-panel-container {
+            width: 24rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .info-panel {
+            background-color: var(--bg-white);
+            padding: 1rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+        }
+        .info-panel h3 {
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .search-group, .filter-group {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .compact-filter {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .filter-label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .compact-filter .filter-label {
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .search-wrapper {
+            position: relative;
+        }
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            z-index: 10;
+            width: 1rem;
+            height: 1rem;
+        }
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+        .search-suggestion {
+            padding: 0.75rem;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+            transition: background-color 0.2s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .search-suggestion:hover {
+            background-color: #f8fafc;
+        }
+        .search-suggestion:last-child {
+            border-bottom: none;
+        }
+        .suggestion-text {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+        .suggestion-score {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            background-color: #e5e7eb;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+        }
+        input[type="text"], input[type="range"], select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+        .compact-filter input[type="range"] {
+            padding: 0.25rem;
+            font-size: 0.75rem;
+        }
+        input[type="text"] {
+            padding-left: 2.5rem;
+        }
+        input[type="text"]:focus, select:focus {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+            border-color: var(--brand-blue);
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 0.5rem;
+            background: #e5e7eb;
+            border-radius: 0.25rem;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            background: var(--brand-blue);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: var(--brand-blue-dark);
+            transform: scale(1.1);
+        }
+        .range-values {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.625rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+        .application-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+            margin-top: 0.25rem;
+        }
+        .application-chip {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.625rem;
+            font-weight: 500;
+            border-radius: 9999px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-white);
+            color: var(--text-secondary);
+        }
+        .application-chip.active {
+            background-color: var(--brand-green);
+            color: white;
+            border-color: var(--brand-green);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+        }
+        .application-chip:hover:not(.active) {
+            background-color: #f3f4f6;
+            transform: translateY(-1px);
+        }
+        .realm-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .view-controls, .action-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .view-controls { justify-content: center; }
+        .action-controls { justify-content: flex-end; }
+        button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: #e5e7eb;
+            color: var(--text-secondary);
+        }
+        button.active {
+            background-color: var(--brand-blue);
+            color: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
+        }
+        button:hover:not(.active) {
+            background-color: #d1d5db;
+            transform: translateY(-1px);
+        }
+        .icon { width: 1rem; height: 1rem; }
+        #visualization { width: 100%; height: 100%; }
+        
+        /* Results counter */
+        .results-counter {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.75rem;
+            background-color: var(--brand-blue);
+            color: white;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        /* D3 Styles for Tree Views */
+        .node { cursor: pointer; transition: opacity 0.3s ease; }
+        .node circle { stroke-width: 2px; transition: r 0.3s ease; }
+        .node text { 
+            font-size: 12px; 
+            paint-order: stroke; 
+            stroke: white; 
+            stroke-width: 2px; 
+            stroke-linejoin: round;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-weight: 500;
+            fill: var(--text-primary);
+        }
+        .node--highlight > text { 
+            fill: #dc2626; 
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .node--highlight > circle { 
+            stroke: #dc2626; 
+            stroke-width: 4px;
+            filter: drop-shadow(0 0 6px rgba(220, 38, 38, 0.5));
+        }
+        .node--search-focus > text {
+            fill: #059669;
+            font-weight: bold;
+            font-size: 15px;
+        }
+        .node--search-focus > circle {
+            stroke: #059669;
+            stroke-width: 5px;
+            filter: drop-shadow(0 0 8px rgba(5, 150, 105, 0.6));
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .node--filtered > circle { opacity: 0.3; }
+        .node--filtered > text { opacity: 0.3; }
+        .link { fill: none; stroke: #d1d5db; stroke-width: 1.5px; transition: stroke 0.3s ease, opacity 0.3s ease; }
+        .link--filtered { opacity: 0.2; }
+        
+        /* Enhanced Sunburst Styles */
+        .sunburst-path {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            stroke: white;
+            stroke-width: 1px;
+        }
+        .sunburst-path:hover {
+            stroke-width: 2px;
+            filter: brightness(1.1);
+        }
+        .sunburst-path--highlight {
+            stroke: #dc2626;
+            stroke-width: 3px;
+            filter: brightness(1.2);
+        }
+        .sunburst-path--search-focus {
+            stroke: #059669;
+            stroke-width: 4px;
+            filter: brightness(1.3) drop-shadow(0 0 6px rgba(5, 150, 105, 0.6));
+            animation: pulse 2s infinite;
+        }
+        .sunburst-path--dimmed {
+            opacity: 0.3;
+        }
+        .sunburst-text {
+            pointer-events: none;
+            fill: #1f2937;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            text-shadow: 0 0 3px rgba(255,255,255,0.9), 0 0 1px rgba(255,255,255,0.8);
+            dominant-baseline: middle;
+        }
+        .sunburst-text--small {
+            font-size: 9px;
+            font-weight: 500;
+        }
+        .sunburst-text--large {
+            font-size: 13px;
+            font-weight: 700;
+        }
+        
+        /* View Mode Toggle */
+        .mode-toggle {
+            background-color: #f3f4f6;
+            border-radius: 0.5rem;
+            padding: 0.25rem;
+            display: inline-flex;
+            gap: 0.25rem;
+        }
+        .mode-toggle button {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+            background-color: transparent;
+            color: var(--text-secondary);
+            border-radius: 0.375rem;
+        }
+        .mode-toggle button.active {
+            background-color: var(--bg-white);
+            color: var(--text-primary);
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Center circle for sunburst */
+        .sunburst-center {
+            fill: var(--bg-light);
+            stroke: var(--border-color);
+            stroke-width: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .sunburst-center:hover {
+            fill: #f3f4f6;
+        }
+        
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-content { flex-direction: column; }
+            .info-panel-container { width: 100%; }
+            .controls-row { grid-template-columns: 1fr; }
+            .filters-row { 
+                grid-template-columns: 1fr; 
+                gap: 0.75rem;
+            }
+            .view-controls, .action-controls { justify-content: flex-start; }
+            .sunburst-text { font-size: 10px; }
+            .sunburst-text--small { font-size: 8px; }
+            .sunburst-text--large { font-size: 12px; }
+        }
+        
+        @media (max-width: 768px) {
+            .container { padding: 0.5rem; }
+            .sunburst-text { font-size: 9px; }
+            .sunburst-text--small { font-size: 7px; }
+            .sunburst-text--large { font-size: 11px; }
+            .application-filters { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header class="header">
+            <h1>Interactive Nature-Based Design Explorer</h1>
+        </header>
+
+        <div class="controls-panel">
+            <div class="controls-row">
+                <div class="search-group">
+                    <label class="filter-label">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        Smart Search & Focus
+                    </label>
+                    <div class="search-wrapper">
+                        <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <input type="text" id="search-input" placeholder="Search elements (e.g., 'green roof', 'water')...">
+                        <div id="search-suggestions" class="search-suggestions"></div>
+                    </div>
+                </div>
+                
+                <div class="view-controls">
+                    <div class="mode-toggle">
+                        <button id="btn-tree-mode" class="active">Tree Views</button>
+                        <button id="btn-advanced-mode">Sunburst View</button>
+                    </div>
+                    <div id="tree-views" class="flex gap-2">
+                        <button id="btn-tidy" class="active">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8h4m-4 8h4M3 8h4m-4 8h4m-4-4h18"></path></svg>
+                            Tidy Tree
+                        </button>
+                        <button id="btn-radial">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>
+                            Radial Tree
+                        </button>
+                    </div>
+                    <div id="advanced-views" style="display: none;">
+                        <button id="btn-sunburst" class="active">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path></svg>
+                            Interactive Sunburst
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="action-controls">
+                    <span id="results-counter" class="results-counter">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 00-2-2z"></path></svg>
+                        <span id="results-count">0</span> elements
+                    </span>
+                    <button id="btn-details">
+                        <svg class="icon" id="icon-eye" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        <svg class="icon" id="icon-eye-off" style="display:none;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                        Details
+                    </button>
+                </div>
+            </div>
+            
+            <div class="filters-row">
+                <div class="filter-group">
+                    <label class="filter-label">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0h10m-9 0a2 2 0 00-2 2v14a2 2 0 002 2h8a2 2 0 002-2V6a2 2 0 00-2-2"></path></svg>
+                        Realm Categories
+                    </label>
+                    <div class="realm-filters" id="realm-filters">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                
+                <div class="compact-filter">
+                    <label class="filter-label">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                        Benefit Score
+                    </label>
+                    <input type="range" id="benefit-range" min="0" max="20" value="0" step="1">
+                    <div class="range-values">
+                        <span>Min: <span id="benefit-min">0</span></span>
+                        <span>Max: 20</span>
+                    </div>
+                </div>
+                
+                <div class="compact-filter">
+                    <label class="filter-label">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        Applications
+                    </label>
+                    <div class="application-filters" id="application-filters">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+                
+                <div style="display: flex; align-items: end;">
+                    <button id="btn-reset-filters" style="background-color: var(--brand-purple); color: white; font-size: 0.75rem; padding: 0.4rem 0.6rem;">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <main class="main-content">
+            <div class="visualization-container">
+                <svg id="visualization"></svg>
+            </div>
+            <div id="info-panel-container" class="info-panel-container">
+                <div class="info-panel" id="details-panel">
+                    <h3>
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Element Details
+                    </h3>
+                    <div id="details-content"><p style="color: #6b7280;">Search for elements or click on a segment to see details.</p></div>
+                </div>
+                <div class="info-panel" style="background-color: #eff6ff; color: #1e40af;">
+                    <h3 style="color: #1d4ed8;">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Smart Search Tips
+                    </h3>
+                    <ul style="padding-left: 1.25rem; margin:0; font-size: 0.875rem;">
+                        <li><strong>Auto-Focus:</strong> Search automatically zooms to relevant elements</li>
+                        <li><strong>Smart Suggestions:</strong> Dropdown shows matching elements as you type</li>
+                        <li><strong>Expand Parents:</strong> Tree views auto-expand to show search results</li>
+                        <li><strong>Visual Highlighting:</strong> Matching elements pulse with green borders</li>
+                        <li>Try searching: "green", "water", "roof", "habitat", "urban"</li>
+                    </ul>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- STATE MANAGEMENT ---
+            let activeView = 'tidy';
+            let viewMode = 'tree';
+            let selectedNodeData = null;
+            let activeRealms = new Set(['Biodiversity', 'Land', 'Water', 'Atmosphere']);
+            let activeApplications = new Set();
+            let searchTerm = '';
+            let minBenefitScore = 0;
+            let filteredElementsCount = 0;
+            let searchMatches = [];
+            let focusedElement = null;
+            const d3State = { zoom: null, g: null, root: null, update: null };
+
+            // --- DOM ELEMENTS ---
+            const svg = d3.select("#visualization");
+            const searchInput = document.getElementById('search-input');
+            const searchSuggestions = document.getElementById('search-suggestions');
+            const benefitRange = document.getElementById('benefit-range');
+            const benefitMin = document.getElementById('benefit-min');
+            const realmFiltersContainer = document.getElementById('realm-filters');
+            const applicationFiltersContainer = document.getElementById('application-filters');
+            const resultsCount = document.getElementById('results-count');
+            const btnResetFilters = document.getElementById('btn-reset-filters');
+            const btnTreeMode = document.getElementById('btn-tree-mode');
+            const btnAdvancedMode = document.getElementById('btn-advanced-mode');
+            const treeViewsContainer = document.getElementById('tree-views');
+            const advancedViewsContainer = document.getElementById('advanced-views');
+            const btnTidy = document.getElementById('btn-tidy');
+            const btnRadial = document.getElementById('btn-radial');
+            const btnSunburst = document.getElementById('btn-sunburst');
+            const btnDetails = document.getElementById('btn-details');
+            const infoPanelContainer = document.getElementById('info-panel-container');
+            const detailsContent = document.getElementById('details-content');
+            const iconEye = document.getElementById('icon-eye');
+            const iconEyeOff = document.getElementById('icon-eye-off');
+
+            // --- DATA ---
+            const data = {
+                name: "Nature-Based Design Elements",
+                children: [
+                    {
+                        name: "Biodiversity", description: "Supporting ecological diversity and habitat creation", color: '#2E7D32',
+                        children: [
+                            { name: "Habitat creation and connection", children: [{ name: "Landscape planting for habitat creation", benefits: 15, description: "Native vegetation to support local wildlife", applications: ["Single Building", "Developments", "Retrofit"] }, { name: "Living Seawalls habitat enhancement modules", benefits: 8, description: "Marine habitat enhancement structures", applications: ["Developments", "Retrofit"] }] },
+                            { name: "Habitat protection and restoration", children: [{ name: "Habitat restoration", benefits: 16, description: "Rehabilitation of degraded natural areas", applications: ["Developments", "Retrofit"] }] },
+                            { name: "Habitat Creation (building)", children: [{ name: "Biodiverse green roofs", benefits: 12, description: "Rooftop ecosystems supporting biodiversity", applications: ["Single Building", "Retrofit"] }, { name: "Biosolar green roof", benefits: 13, description: "Combined solar and green roof systems", applications: ["Single Building", "Retrofit"] }, { name: "External green wall", benefits: 9, description: "Vertical gardens on building facades", applications: ["Single Building", "Retrofit"] }, { name: "Habitat Analogues", benefits: 6, description: "Artificial habitats mimicking natural conditions", applications: ["Single Building", "Developments"] }] }
+                        ]
+                    },
+                    {
+                        name: "Land", description: "Sustainable land use and soil management", color: '#8D6E63',
+                        children: [
+                            { name: "Land restoration", children: [{ name: "Land formation retention and restoration", benefits: 18, description: "Preserving natural topography and soil structure", applications: ["Developments", "Retrofit"] }] },
+                            { name: "Soil restoration", children: [{ name: "Soil retention and restoration", benefits: 9, description: "Preventing erosion and enhancing soil quality", applications: ["Developments", "Retrofit"] }] },
+                            { name: "Urban Greening", children: [{ name: "Blue / Green Streetscape", benefits: 11, description: "Water-integrated street vegetation", applications: ["Developments", "Retrofit"] }, { name: "Green Space", benefits: 20, description: "Parks and open vegetated areas", applications: ["Developments", "Retrofit"] }, { name: "Community gardens", benefits: 14, description: "Shared food production spaces", applications: ["Developments", "Retrofit"] }, { name: "Elevated park", benefits: 14, description: "Above-ground green recreational spaces", applications: ["Single Building", "Developments"] }, { name: "External green façade", benefits: 6, description: "Building-integrated plant systems", applications: ["Single Building", "Retrofit"] }, { name: "External Planter Boxes", benefits: 7, description: "Modular container gardening systems", applications: ["Single Building", "Retrofit"] }] }
+                        ]
+                    },
+                    {
+                        name: "Water", description: "Sustainable water management and aquatic systems", color: '#1976D2',
+                        children: [
+                            { name: "River Restoration", children: [{ name: "River and Creek Restoration", benefits: 17, description: "Restoring natural waterway function", applications: ["Developments", "Retrofit"] }] },
+                            { name: "River Flood Management", children: [{ name: "Reconnecting river and floodplain", benefits: 16, description: "Restoring natural flood cycles", applications: ["Developments"] }] },
+                            { name: "Stormwater Management", children: [{ name: "Bioretention systems", benefits: 11, description: "Vegetated stormwater filtration", applications: ["Single Building", "Developments", "Retrofit"] }, { name: "Swales", benefits: 10, description: "Linear vegetated drainage channels", applications: ["Developments", "Retrofit"] }, { name: "Naturalised basin", benefits: 12, description: "Natural-style water retention areas", applications: ["Developments", "Retrofit"] }, { name: "Constructed Wetlands", benefits: 13, description: "Engineered wetland systems for water treatment", applications: ["Developments", "Retrofit"] }] },
+                            { name: "Water harvesting", children: [{ name: "Rainwater Tanks", benefits: 7, description: "Water collection and storage systems", applications: ["Single Building", "Developments", "Retrofit"] }] }
+                        ]
+                    },
+                    {
+                        name: "Atmosphere", description: "Air quality and climate regulation", color: '#7B1FA2',
+                        children: [
+                            { name: "Carbon Sequestration", children: [{ name: "Urban Greening", benefits: 10, description: "Vegetation for carbon capture", applications: ["Single Building", "Developments", "Retrofit"] }, { name: "Biobased materials", benefits: 3, description: "Materials that store carbon", applications: ["Single Building", "Retrofit"] }] },
+                            { name: "Improve air quality", children: [{ name: "Urban Greening (Air)", benefits: 10, description: "Plants for air pollution reduction", applications: ["Single Building", "Developments", "Retrofit"] }] },
+                            { name: "Sound environment", children: [{ name: "Soundscapes", benefits: 5, description: "Natural sound environments", applications: ["Developments", "Retrofit"] }] }
+                        ]
+                    }
+                ]
+            };
+
+            // --- COLOR SCALE ---
+            const color = d3.scaleOrdinal()
+                .domain(data.children.map(d => d.name))
+                .range(['#2E7D32', '#8D6E63', '#1976D2', '#7B1FA2']);
+
+            // --- SEARCH FUNCTIONALITY ---
+            function getAllElements() {
+                const elements = [];
+                data.children.forEach(realm => {
+                    realm.children.forEach(category => {
+                        category.children.forEach(element => {
+                            elements.push({
+                                ...element,
+                                realm: realm.name,
+                                category: category.name
+                            });
+                        });
+                    });
+                });
+                return elements;
+            }
+
+            function getSearchSuggestions(query) {
+                if (!query || query.length < 2) return [];
+                
+                const elements = getAllElements();
+                const matches = elements.filter(element => 
+                    element.name.toLowerCase().includes(query.toLowerCase()) ||
+                    (element.description && element.description.toLowerCase().includes(query.toLowerCase())) ||
+                    element.realm.toLowerCase().includes(query.toLowerCase()) ||
+                    element.category.toLowerCase().includes(query.toLowerCase())
+                ).slice(0, 5); // Limit to 5 suggestions
+                
+                return matches;
+            }
+
+            function showSearchSuggestions(suggestions) {
+                if (suggestions.length === 0) {
+                    searchSuggestions.style.display = 'none';
+                    return;
+                }
+                
+                searchSuggestions.innerHTML = '';
+                suggestions.forEach(element => {
+                    const suggestionDiv = document.createElement('div');
+                    suggestionDiv.className = 'search-suggestion';
+                    suggestionDiv.innerHTML = `
+                        <span class="suggestion-text">${element.name}</span>
+                        <span class="suggestion-score">Score: ${element.benefits}</span>
+                    `;
+                    suggestionDiv.addEventListener('click', () => {
+                        searchInput.value = element.name;
+                        searchSuggestions.style.display = 'none';
+                        performSearch(element.name);
+                        focusOnElement(element);
+                    });
+                    searchSuggestions.appendChild(suggestionDiv);
+                });
+                
+                searchSuggestions.style.display = 'block';
+            }
+
+            function hideSearchSuggestions() {
+                setTimeout(() => {
+                    searchSuggestions.style.display = 'none';
+                }, 200);
+            }
+
+            function performSearch(query) {
+                searchTerm = query.trim();
+                if (viewMode === 'tree') {
+                    applyTreeSearch();
+                } else {
+                    redrawVisualization();
+                }
+            }
+
+            function focusOnElement(element) {
+                focusedElement = element;
+                selectedNodeData = element;
+                updateInfoPanel();
+                
+                if (viewMode === 'tree') {
+                    focusTreeOnElement(element);
+                } else {
+                    focusSunburstOnElement(element);
+                }
+            }
+
+            function focusTreeOnElement(element) {
+                if (!d3State.root || !d3State.g) return;
+                
+                let targetNode = null;
+                d3State.root.each(node => {
+                    if (node.data.name === element.name) {
+                        targetNode = node;
+                    }
+                });
+                
+                if (targetNode) {
+                    targetNode.ancestors().forEach(ancestor => {
+                        if (ancestor._children) {
+                            ancestor.children = ancestor._children;
+                        }
+                    });
+                    
+                    d3State.update(d3State.root);
+                    
+                    setTimeout(() => {
+                        const { width, height } = svg.node().getBoundingClientRect();
+                        const scale = 1.5;
+                        const x = -targetNode.y * scale + width / 2;
+                        const y = -targetNode.x * scale + height / 2;
+                        
+                        svg.transition()
+                            .duration(1000)
+                            .call(d3State.zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
+                    }, 100);
+                }
+            }
+
+            function focusSunburstOnElement(element) {
+                redrawVisualization();
+            }
+
+            // --- FILTERING LOGIC ---
+            function getAllApplications() {
+                const applications = new Set();
+                data.children.forEach(realm => {
+                    realm.children.forEach(category => {
+                        category.children.forEach(element => {
+                            if (element.applications) {
+                                element.applications.forEach(app => applications.add(app));
+                            }
+                        });
+                    });
+                });
+                return Array.from(applications).sort();
+            }
+
+            function elementPassesFilters(element) {
+                if (element.benefits < minBenefitScore) return false;
+                if (activeApplications.size > 0 && element.applications) {
+                    const hasMatchingApplication = element.applications.some(app => activeApplications.has(app));
+                    if (!hasMatchingApplication) return false;
+                }
+                return true;
+            }
+
+            function matchesSearch(d) {
+                if (!searchTerm) return false;
+                return d.data.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                       (d.data.description && d.data.description.toLowerCase().includes(searchTerm.toLowerCase()));
+            }
+
+            function getFilteredData() {
+                const filteredData = {
+                    ...data,
+                    children: data.children.filter(realm => activeRealms.has(realm.name)).map(realm => ({
+                        ...realm,
+                        children: realm.children.map(category => ({
+                            ...category,
+                            children: category.children.filter(element => elementPassesFilters(element))
+                        })).filter(category => category.children.length > 0)
+                    })).filter(realm => realm.children.length > 0)
+                };
+                
+                filteredElementsCount = 0;
+                filteredData.children.forEach(realm => {
+                    realm.children.forEach(category => {
+                        filteredElementsCount += category.children.length;
+                    });
+                });
+                
+                return filteredData;
+            }
+
+            function updateResultsCounter() {
+                resultsCount.textContent = filteredElementsCount;
+            }
+
+            // --- DATA PROCESSING FOR SUNBURST ---
+            function parseHierarchy() {
+                const filteredData = getFilteredData();
+                
+                return {
+                    name: "Nature-based Design",
+                    children: filteredData.children.map(realm => ({
+                        name: realm.name,
+                        color: realm.color,
+                        description: realm.description,
+                        children: realm.children.map(category => ({
+                            name: category.name,
+                            children: category.children.map(element => ({
+                                name: element.name,
+                                value: element.benefits || 0,
+                                description: element.description,
+                                applications: element.applications
+                            }))
+                        }))
+                    }))
+                };
+            }
+
+            // --- VISUALIZATION LOGIC ---
+            function redrawVisualization() {
+                const { width, height } = svg.node().getBoundingClientRect();
+                svg.selectAll("*").remove();
+
+                if (viewMode === 'tree') {
+                    const filteredData = getFilteredData();
+
+                    d3State.g = svg.append("g");
+                    d3State.zoom = d3.zoom().scaleExtent([0.2, 5]).on("zoom", (event) => d3State.g.attr("transform", event.transform));
+                    svg.call(d3State.zoom);
+
+                    d3State.root = d3.hierarchy(filteredData);
+                    d3State.root.x0 = height / 2;
+                    d3State.root.y0 = width / 2;
+                    
+                    d3State.root.descendants().forEach(d => {
+                        if (d.depth > 1) {
+                            d._children = d.children;
+                            d.children = null;
+                        } else {
+                            d._children = d.children;
+                        }
+                    });
+
+                    if (activeView === 'tidy') drawTidyTree(width, height);
+                    else if (activeView === 'radial') drawRadialTree(width, height);
+                    
+                    applyTreeSearch();
+                } else {
+                    drawSunburst(width, height);
+                }
+                
+                updateResultsCounter();
+            }
+
+            // Tree view functions with enhanced search focus
+            function drawTidyTree(width, height) {
+                const margin = { top: 50, right: 50, bottom: 50, left: 50 };
+                const treeLayout = d3.tree().nodeSize([50, 350]);
+
+                function update(source) {
+                    const duration = 400;
+                    const root = d3State.root;
+                    const g = d3State.g;
+
+                    treeLayout(root);
+                    
+                    let left = root, right = root;
+                    root.eachBefore(node => {
+                        if (node.x < left.x) left = node;
+                        if (node.x > right.x) right = node;
+                    });
+                    
+                    const treeHeight = right.x - left.x;
+                    const treeWidth = (root.height + 1) * 350;
+                    const offsetX = (width - treeWidth) / 2;
+                    const offsetY = (height - treeHeight) / 2 - left.x;
+                    
+                    svg.transition().duration(duration).call(
+                        d3State.zoom.transform, 
+                        d3.zoomIdentity.translate(offsetX, offsetY)
+                    );
+
+                    const nodes = root.descendants().reverse();
+                    const links = root.links();
+                    
+                    const node = g.selectAll("g.node").data(nodes, d => d.id || (d.id = d.data.name + Math.random()));
+                    const nodeEnter = node.enter().append("g").attr("class", "node").attr("transform", `translate(${source.y0},${source.x0})`)
+                        .on("click", (event, d) => {
+                            selectedNodeData = d.data;
+                            updateInfoPanel();
+                            if (d.children || d._children) {
+                                d.children = d.children ? null : d._children;
+                                update(d);
+                            }
+                        });
+                    
+                    nodeEnter.append("circle")
+                        .attr("r", 1e-6)
+                        .style("fill", d => d._children ? d.data.color || "#ccc" : "#fff")
+                        .style("stroke", d => d.data.color || "#ccc");
+                    
+                    nodeEnter.append("text")
+                        .attr("x", d => d.children || d._children ? -15 : 15)
+                        .attr("dy", ".35em")
+                        .attr("text-anchor", d => d.children || d._children ? "end" : "start")
+                        .text(d => d.data.name)
+                        .style("fill-opacity", 1e-6);
+                    
+                    const nodeUpdate = node.merge(nodeEnter);
+                    
+                    nodeUpdate.transition().duration(duration)
+                        .attr("transform", d => `translate(${d.y},${d.x})`);
+                    
+                    nodeUpdate.select("circle")
+                        .transition().duration(duration)
+                        .attr("r", 8)
+                        .style("fill", d => d._children ? d.data.color || "#ccc" : "#fff");
+                    
+                    nodeUpdate.select("text")
+                        .transition().duration(duration)
+                        .style("fill-opacity", 1);
+                    
+                    const nodeExit = node.exit();
+                    nodeExit.transition().duration(duration)
+                        .attr("transform", `translate(${source.y},${source.x})`)
+                        .remove();
+                    
+                    nodeExit.select("circle")
+                        .transition().duration(duration)
+                        .attr("r", 1e-6);
+                    
+                    nodeExit.select("text")
+                        .transition().duration(duration)
+                        .style("fill-opacity", 1e-6);
+
+                    const link = g.selectAll("path.link").data(links, d => d.target.id);
+                    
+                    const linkEnter = link.enter().insert("path", "g")
+                        .attr("class", "link")
+                        .attr("d", d => {
+                            const o = { x: source.x0, y: source.y0 };
+                            return d3.linkHorizontal()({ source: o, target: o });
+                        });
+                    
+                    link.merge(linkEnter)
+                        .transition().duration(duration)
+                        .attr("d", d3.linkHorizontal().x(d => d.y).y(d => d.x));
+                    
+                    link.exit()
+                        .transition().duration(duration)
+                        .attr("d", d => {
+                            const o = { x: source.x, y: source.y };
+                            return d3.linkHorizontal()({ source: o, target: o });
+                        })
+                        .remove();
+
+                    nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+
+                    g.selectAll("g.node")
+                        .on("mouseover", (event, d) => {
+                            const path = d.ancestors();
+                            g.selectAll("g.node").style("opacity", n => path.includes(n) ? 1 : 0.3);
+                            g.selectAll("path.link").style("opacity", l => path.includes(l.source) && path.includes(l.target) ? 1 : 0.1);
+                        })
+                        .on("mouseout", () => {
+                            g.selectAll("g.node").style("opacity", 1);
+                            g.selectAll("path.link").style("opacity", 1);
+                        });
+                }
+                d3State.update = update;
+                update(d3State.root);
+            }
+
+            function drawRadialTree(width, height) {
+                const radius = Math.min(width, height) / 2 - 120;
+                const treeLayout = d3.tree().size([2 * Math.PI, radius]).separation((a, b) => (a.parent == b.parent ? 1 : 2) / a.depth);
+
+                function update(source) {
+                    const duration = 400;
+                    const root = d3State.root;
+                    const g = d3State.g;
+                    
+                    svg.transition().duration(duration).call(
+                        d3State.zoom.transform, 
+                        d3.zoomIdentity.translate(width / 2, height / 2)
+                    );
+                    
+                    treeLayout(root);
+                    const nodes = root.descendants();
+                    const links = root.links();
+                    
+                    const node = g.selectAll("g.node").data(nodes, d => d.id || (d.id = d.data.name + Math.random()));
+                    
+                    const nodeEnter = node.enter().append("g")
+                        .attr("class", "node")
+                        .attr("transform", d => `rotate(${(source.x0 * 180 / Math.PI) - 90}) translate(${source.y0},0)`)
+                        .on("click", (event, d) => {
+                            selectedNodeData = d.data;
+                            updateInfoPanel();
+                            if (d.children || d._children) {
+                                d.children = d.children ? null : d._children;
+                                update(d);
+                            }
+                        });
+                    
+                    nodeEnter.append("circle")
+                        .attr("r", 1e-6)
+                        .style("fill", d => d._children ? d.data.color || "#ccc" : "#fff")
+                        .style("stroke", d => d.data.color || "#ccc");
+                    
+                    nodeEnter.append("text")
+                        .attr("dy", "0.31em")
+                        .attr("x", d => {
+                            if (d.depth === 0) return 0;
+                            return d.x < Math.PI === !d.children ? 12 : -12;
+                        })
+                        .attr("text-anchor", d => {
+                            if (d.depth === 0) return "middle";
+                            return d.x < Math.PI === !d.children ? "start" : "end";
+                        })
+                        .attr("transform", d => {
+                            if (d.depth === 0) return null;
+                            return d.x >= Math.PI ? "rotate(180)" : null;
+                        })
+                        .text(d => d.data.name)
+                        .style("fill-opacity", 1e-6);
+                    
+                    const nodeUpdate = node.merge(nodeEnter);
+                    
+                    nodeUpdate.transition().duration(duration)
+                        .attr("transform", d => {
+                            if (d.depth === 0) return `translate(0,0)`;
+                            return `rotate(${(d.x * 180 / Math.PI) - 90}) translate(${d.y},0)`;
+                        });
+                    
+                    nodeUpdate.select("circle")
+                        .transition().duration(duration)
+                        .attr("r", 8);
+                    
+                    nodeUpdate.select("text")
+                        .transition().duration(duration)
+                        .attr("transform", d => {
+                            if (d.depth === 0) return null;
+                            return d.x >= Math.PI ? "rotate(180)" : null;
+                        })
+                        .style("fill-opacity", 1);
+                    
+                    const nodeExit = node.exit();
+                    nodeExit.transition().duration(duration)
+                        .attr("transform", `rotate(${(source.x * 180 / Math.PI) - 90}) translate(${source.y},0)`)
+                        .remove();
+                    
+                    nodeExit.select("circle")
+                        .transition().duration(duration)
+                        .attr("r", 1e-6);
+                    
+                    nodeExit.select("text")
+                        .transition().duration(duration)
+                        .style("fill-opacity", 1e-6);
+
+                    const link = g.selectAll("path.link").data(links, d => d.target.id);
+                    
+                    const linkEnter = link.enter().insert("path", "g")
+                        .attr("class", "link")
+                        .attr("d", d3.linkRadial().angle(d => source.x0).radius(d => source.y0));
+                    
+                    link.merge(linkEnter)
+                        .transition().duration(duration)
+                        .attr("d", d3.linkRadial().angle(d => d.x).radius(d => d.y));
+                    
+                    link.exit()
+                        .transition().duration(duration)
+                        .attr("d", d3.linkRadial().angle(d => source.x).radius(d => source.y))
+                        .remove();
+
+                    nodes.forEach(d => { d.x0 = d.x; d.y0 = d.y; });
+                }
+                d3State.update = update;
+                update(d3State.root);
+            }
+
+            // Enhanced Sunburst function
+            function drawSunburst(width, height) {
+                const g = svg.append("g").attr("transform", `translate(${width / 2},${height / 2})`);
+                const radius = Math.min(width, height) / 6;
+                const hierarchyData = parseHierarchy();
+                const root = d3.hierarchy(hierarchyData).sum(d => d.value).sort((a, b) => b.value - a.value);
+                const partition = d3.partition().size([2 * Math.PI, root.height + 1]);
+                const rootPartition = partition(root);
+                
+                rootPartition.each(d => d.current = d);
+
+                const arc = d3.arc()
+                    .startAngle(d => d.x0)
+                    .endAngle(d => d.x1)
+                    .padAngle(d => Math.min((d.x1 - d.x0) / 2, 0.005))
+                    .padRadius(radius * 1.5)
+                    .innerRadius(d => d.y0 * radius)
+                    .outerRadius(d => Math.max(d.y0 * radius, d.y1 * radius - 1));
+
+                searchMatches = searchTerm ? rootPartition.descendants().filter(d => matchesSearch(d)) : [];
+                
+                let focusedNode = null;
+                if (focusedElement) {
+                    rootPartition.each(d => {
+                        if (d.data.name === focusedElement.name) {
+                            focusedNode = d;
+                        }
+                    });
+                }
+
+                const path = g.append("g").selectAll("path")
+                    .data(rootPartition.descendants().slice(1))
+                    .join("path")
+                    .attr("class", d => {
+                        let classes = "sunburst-path";
+                        if (focusedNode && d === focusedNode) {
+                            classes += " sunburst-path--search-focus";
+                        } else if (searchTerm && searchMatches.includes(d)) {
+                            classes += " sunburst-path--highlight";
+                        } else if (searchTerm && searchMatches.length > 0) {
+                            classes += " sunburst-path--dimmed";
+                        }
+                        return classes;
+                    })
+                    .attr("fill", d => {
+                        while (d.depth > 1) d = d.parent;
+                        return color(d.data.name);
+                    })
+                    .attr("fill-opacity", d => {
+                        const baseOpacity = arcVisible(d.current) ? (d.children ? 0.8 : 0.6) : 0;
+                        if (searchTerm && searchMatches.length > 0 && !searchMatches.includes(d) && d !== focusedNode) {
+                            return baseOpacity * 0.3;
+                        }
+                        return baseOpacity;
+                    })
+                    .attr("pointer-events", d => arcVisible(d.current) ? "auto" : "none")
+                    .attr("d", d => arc(d.current));
+
+                path.filter(d => d.children)
+                    .style("cursor", "pointer")
+                    .on("click", clicked);
+
+                path.on("mouseover", (event, d) => {
+                        selectedNodeData = d.data;
+                        updateInfoPanel();
+                        
+                        const ancestors = d.ancestors();
+                        path.style("fill-opacity", node => {
+                            const baseOpacity = ancestors.includes(node) ? 0.9 : 0.3;
+                            return baseOpacity;
+                        });
+                    })
+                    .on("mouseout", () => {
+                        path.style("fill-opacity", d => {
+                            const baseOpacity = arcVisible(d.current) ? (d.children ? 0.8 : 0.6) : 0;
+                            if (searchTerm && searchMatches.length > 0 && !searchMatches.includes(d) && d !== focusedNode) {
+                                return baseOpacity * 0.3;
+                            }
+                            return baseOpacity;
+                        });
+                    });
+
+                const label = g.append("g")
+                    .attr("pointer-events", "none")
+                    .attr("text-anchor", "middle")
+                    .style("user-select", "none")
+                    .selectAll("text")
+                    .data(rootPartition.descendants().slice(1))
+                    .join("text")
+                    .attr("class", d => {
+                        let classes = "sunburst-text";
+                        if (d.depth === 1) classes += " sunburst-text--large";
+                        else if (d.depth > 2) classes += " sunburst-text--small";
+                        return classes;
+                    })
+                    .attr("dy", "0.35em")
+                    .attr("fill-opacity", d => +labelVisible(d.current))
+                    .attr("transform", d => labelTransform(d.current))
+                    .text(d => {
+                        const arcLength = (d.x1 - d.x0) * d.y1 * radius;
+                        const maxChars = Math.max(5, Math.floor(arcLength / 8));
+                        return d.data.name.length > maxChars ? 
+                               d.data.name.substring(0, maxChars) + '...' : 
+                               d.data.name;
+                    });
+
+                const centerCircle = g.append("circle")
+                    .datum(root)
+                    .attr("class", "sunburst-center")
+                    .attr("r", radius)
+                    .attr("fill", "var(--bg-light)")
+                    .attr("stroke", "var(--border-color)")
+                    .attr("stroke-width", 2)
+                    .attr("pointer-events", "all")
+                    .on("click", clicked);
+
+                const centerText = g.append("g")
+                    .attr("text-anchor", "middle")
+                    .style("font-weight", "600")
+                    .style("fill", "var(--text-primary)");
+
+                centerText.append("text")
+                    .attr("y", "-0.5em")
+                    .style("font-size", "13px")
+                    .text("Nature-Based");
+
+                centerText.append("text")
+                    .attr("y", "0.7em")
+                    .style("font-size", "13px")
+                    .text("Design");
+
+                function clicked(event, p) {
+                    const parent = g.select(".sunburst-center").datum(p.parent || root);
+                    
+                    root.each(d => d.target = {
+                        x0: Math.max(0, Math.min(1, (d.x0 - p.x0) / (p.x1 - p.x0))) * 2 * Math.PI,
+                        x1: Math.max(0, Math.min(1, (d.x1 - p.x0) / (p.x1 - p.x0))) * 2 * Math.PI,
+                        y0: Math.max(0, d.y0 - p.depth),
+                        y1: Math.max(0, d.y1 - p.depth)
+                    });
+                    
+                    const t = g.transition().duration(750);
+                    
+                    path.transition(t)
+                        .tween("data", d => {
+                            const i = d3.interpolate(d.current, d.target);
+                            return t => d.current = i(t);
+                        })
+                        .filter(function(d) { 
+                            return +this.getAttribute("fill-opacity") || arcVisible(d.target); 
+                        })
+                        .attr("fill-opacity", d => {
+                            const baseOpacity = arcVisible(d.target) ? (d.children ? 0.8 : 0.6) : 0;
+                            if (searchTerm && searchMatches.length > 0 && !searchMatches.includes(d) && d !== focusedNode) {
+                                return baseOpacity * 0.3;
+                            }
+                            return baseOpacity;
+                        })
+                        .attr("pointer-events", d => arcVisible(d.target) ? "auto" : "none")
+                        .attrTween("d", d => () => arc(d.current));
+                    
+                    label.filter(function(d) { 
+                            return +this.getAttribute("fill-opacity") || labelVisible(d.target); 
+                        })
+                        .transition(t)
+                        .attr("fill-opacity", d => +labelVisible(d.target))
+                        .attrTween("transform", d => () => labelTransform(d.current));
+                }
+                
+                function arcVisible(d) { 
+                    return d.y1 <= 3 && d.y0 >= 1 && d.x1 > d.x0; 
+                }
+                
+                function labelVisible(d) { 
+                    return d.y1 <= 3 && d.y0 >= 1 && (d.y1 - d.y0) * (d.x1 - d.x0) > 0.05; 
+                }
+                
+                function labelTransform(d) {
+                    const x = (d.x0 + d.x1) / 2 * 180 / Math.PI;
+                    const y = (d.y0 + d.y1) / 2 * radius;
+                    return `rotate(${x - 90}) translate(${y},0) rotate(${x < 180 ? 0 : 180})`;
+                }
+            }
+            
+            function applyTreeSearch() {
+                if (!d3State.root || !d3State.update) return;
+                const g = d3State.g;
+                g.selectAll(".node").classed("node--highlight", false).classed("node--search-focus", false);
+
+                if (searchTerm) {
+                    let foundNodes = [];
+                    d3State.root.each(d => {
+                        if (d.data.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (d.data.description && d.data.description.toLowerCase().includes(searchTerm.toLowerCase()))) {
+                            foundNodes.push(d);
+                        }
+                    });
+                    foundNodes.forEach(node => node.ancestors().forEach(ancestor => { 
+                        if (ancestor._children) ancestor.children = ancestor._children; 
+                    }));
+                    d3State.update(d3State.root);
+                    
+                    g.selectAll(".node").filter(d => foundNodes.includes(d)).classed("node--highlight", true);
+                    
+                    if (focusedElement) {
+                        g.selectAll(".node").filter(d => d.data.name === focusedElement.name)
+                            .classed("node--search-focus", true)
+                            .classed("node--highlight", false);
+                    }
+                }
+            }
+            
+            // --- UI SETUP AND EVENT LISTENERS ---
+            function setupEventListeners() {
+                searchInput.addEventListener('input', (e) => {
+                    const query = e.target.value.trim();
+                    
+                    if (query.length >= 2) {
+                        const suggestions = getSearchSuggestions(query);
+                        showSearchSuggestions(suggestions);
+                    } else {
+                        searchSuggestions.style.display = 'none';
+                    }
+                    
+                    performSearch(query);
+                });
+                
+                searchInput.addEventListener('blur', hideSearchSuggestions);
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        searchInput.value = '';
+                        searchTerm = '';
+                        focusedElement = null;
+                        searchSuggestions.style.display = 'none';
+                        redrawVisualization();
+                    }
+                });
+                
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.search-wrapper')) {
+                        searchSuggestions.style.display = 'none';
+                    }
+                });
+                
+                benefitRange.addEventListener('input', (e) => {
+                    minBenefitScore = parseInt(e.target.value);
+                    benefitMin.textContent = minBenefitScore;
+                    redrawVisualization();
+                });
+                
+                btnResetFilters.addEventListener('click', resetAllFilters);
+                btnTreeMode.addEventListener('click', () => switchMode('tree'));
+                btnAdvancedMode.addEventListener('click', () => switchMode('advanced'));
+                btnTidy.addEventListener('click', () => switchView('tidy'));
+                btnRadial.addEventListener('click', () => switchView('radial'));
+                btnSunburst.addEventListener('click', () => switchView('sunburst'));
+                btnDetails.addEventListener('click', toggleDetailsPanel);
+            }
+
+            function populateApplicationFilters() {
+                const applications = getAllApplications();
+                applicationFiltersContainer.innerHTML = '';
+                
+                applications.forEach(app => {
+                    const chip = document.createElement('div');
+                    chip.className = 'application-chip';
+                    chip.textContent = app;
+                    chip.addEventListener('click', () => {
+                        if (activeApplications.has(app)) {
+                            activeApplications.delete(app);
+                            chip.classList.remove('active');
+                        } else {
+                            activeApplications.add(app);
+                            chip.classList.add('active');
+                        }
+                        redrawVisualization();
+                    });
+                    applicationFiltersContainer.appendChild(chip);
+                });
+            }
+
+            function populateRealmFilters() {
+                data.children.forEach(realm => {
+                    const button = document.createElement('button');
+                    button.textContent = realm.name;
+                    button.style.backgroundColor = realm.color;
+                    button.classList.add('active');
+                    button.dataset.realm = realm.name;
+                    button.style.color = 'white';
+                    button.addEventListener('click', () => {
+                        if (activeRealms.has(realm.name)) {
+                            activeRealms.delete(realm.name);
+                            button.style.backgroundColor = '#e5e7eb';
+                            button.style.color = 'var(--text-secondary)';
+                        } else {
+                            activeRealms.add(realm.name);
+                            button.style.backgroundColor = realm.color;
+                            button.style.color = 'white';
+                        }
+                        button.classList.toggle('active');
+                        redrawVisualization();
+                    });
+                    realmFiltersContainer.appendChild(button);
+                });
+            }
+
+            function resetAllFilters() {
+                searchTerm = '';
+                minBenefitScore = 0;
+                activeRealms = new Set(['Biodiversity', 'Land', 'Water', 'Atmosphere']);
+                activeApplications.clear();
+                focusedElement = null;
+                
+                searchInput.value = '';
+                benefitRange.value = 0;
+                benefitMin.textContent = '0';
+                searchSuggestions.style.display = 'none';
+                
+                document.querySelectorAll('#realm-filters button').forEach(btn => {
+                    const realmName = btn.dataset.realm;
+                    const realm = data.children.find(r => r.name === realmName);
+                    btn.style.backgroundColor = realm.color;
+                    btn.style.color = 'white';
+                    btn.classList.add('active');
+                });
+                
+                document.querySelectorAll('.application-chip').forEach(chip => {
+                    chip.classList.remove('active');
+                });
+                
+                redrawVisualization();
+            }
+
+            function switchMode(mode) {
+                viewMode = mode;
+                btnTreeMode.classList.toggle('active', mode === 'tree');
+                btnAdvancedMode.classList.toggle('active', mode === 'advanced');
+                
+                if (mode === 'tree') {
+                    treeViewsContainer.style.display = 'flex';
+                    advancedViewsContainer.style.display = 'none';
+                    activeView = 'tidy';
+                    updateViewButtons();
+                } else {
+                    treeViewsContainer.style.display = 'none';
+                    advancedViewsContainer.style.display = 'flex';
+                    activeView = 'sunburst';
+                    updateViewButtons();
+                }
+                
+                redrawVisualization();
+            }
+
+            function switchView(view) {
+                activeView = view;
+                updateViewButtons();
+                redrawVisualization();
+            }
+            
+            function updateViewButtons() {
+                document.querySelectorAll('#tree-views button, #advanced-views button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                if (activeView === 'tidy') btnTidy.classList.add('active');
+                else if (activeView === 'radial') btnRadial.classList.add('active');
+                else if (activeView === 'sunburst') btnSunburst.classList.add('active');
+            }
+            
+            function toggleDetailsPanel() {
+                const isVisible = infoPanelContainer.style.display !== 'none';
+                infoPanelContainer.style.display = isVisible ? 'none' : 'flex';
+                iconEye.style.display = isVisible ? 'none' : 'block';
+                iconEyeOff.style.display = isVisible ? 'block' : 'none';
+            }
+
+            function updateInfoPanel() {
+                if (!selectedNodeData) {
+                    detailsContent.innerHTML = `<p style="color: #6b7280;">Search for elements or click on a segment to see details.</p>`;
+                    return;
+                }
+                let html = `<h4 style="font-weight: 600; font-size: 1.125rem; color: #1f2937;">${selectedNodeData.name}</h4>`;
+                
+                if (selectedNodeData.description) {
+                    html += `<p style="font-size: 0.875rem; color: #4b5563; margin-top: 0.25rem;">${selectedNodeData.description}</p>`;
+                }
+                
+                if (selectedNodeData.benefits || selectedNodeData.value) {
+                    const score = selectedNodeData.benefits || selectedNodeData.value;
+                    html += `<div style="background-color: #f0fdf4; padding: 0.75rem; border-radius: 0.5rem; margin-top: 0.75rem;">
+                        <div style="font-size: 0.875rem; font-weight: 500; color: #166534;">Benefit Score: ${score}</div>
+                        <div style="width: 100%; background-color: #bbf7d0; border-radius: 9999px; height: 0.5rem; margin-top: 0.5rem;">
+                            <div style="background-color: #22c55e; height: 0.5rem; border-radius: 9999px; width: ${Math.min(100, (score / 20) * 100)}%;"></div>
+                        </div>
+                    </div>`;
+                }
+                
+                if (selectedNodeData.applications) {
+                    html += `<div style="margin-top: 0.75rem;">
+                        <h5 style="font-weight: 500; font-size: 0.875rem; color: #374151; margin-bottom: 0.5rem;">Applications:</h5>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                            ${selectedNodeData.applications.map(app => `<span style="padding: 0.25rem 0.5rem; background-color: #dbeafe; color: #1e40af; font-size: 0.75rem; border-radius: 9999px;">${app}</span>`).join('')}
+                        </div>
+                    </div>`;
+                }
+                
+                detailsContent.innerHTML = html;
+            }
+
+            // --- INITIALIZATION ---
+            populateRealmFilters();
+            populateApplicationFilters();
+            setupEventListeners();
+            redrawVisualization();
+            window.addEventListener('resize', redrawVisualization);
+        });
+    </script>
+</body>
+</html>
