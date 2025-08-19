@@ -1,0 +1,446 @@
+// ==============================================
+// OPTIMIZED POWER BI QUERIES
+// ==============================================
+
+// HELPER FUNCTIONS
+// ==============================================
+
+// Common function for unpivoting year columns (FY14-FY40)
+fnUnpivotYears = (inputTable as table, identifierColumns as list, attributeName as text, valueName as text) =>
+    let
+        UnpivotedTable = Table.UnpivotOtherColumns(inputTable, identifierColumns, attributeName, valueName),
+        CleanedTable = Table.TransformColumnTypes(UnpivotedTable, {{valueName, type number}})
+    in
+        CleanedTable,
+
+// Common function for creating full year from FY format
+fnCreateFullYear = (fyColumn as text) =>
+    let
+        yearText = Text.End(fyColumn, 2),
+        fullYear = Number.FromText("20" & yearText)
+    in
+        fullYear,
+
+// BASE DATA QUERIES
+// ==============================================
+
+// Consolidated Normalizer
+Base_Normalizer = 
+let
+    Source = Excel.CurrentWorkbook(){[Name="Table6"]}[Content],
+    TypedSource = Table.TransformColumnTypes(Source,{
+        {"Business_Units", type text}, {"Unit", type text}
+    }),
+    YearColumns = List.Select(Table.ColumnNames(TypedSource), each Text.StartsWith(_, "FY")),
+    TypeTransforms = List.Transform(YearColumns, each {_, type number}),
+    ChangedTypes = Table.TransformColumnTypes(TypedSource, TypeTransforms),
+    Result = fnUnpivotYears(ChangedTypes, {"Business_Units", "Unit"}, "Year", "Normiliser_factor")
+in
+    Result,
+
+// Consolidated Scope Data
+Base_ScopeData = 
+let
+    // S1 History
+    S1Source = Excel.CurrentWorkbook(){[Name="S1.History"]}[Content],
+    S1Typed = Table.TransformColumnTypes(S1Source,{{"Scope 1 (tCO2-eq)", type text}}),
+    S1YearColumns = List.Select(Table.ColumnNames(S1Typed), each Text.StartsWith(_, "FY")),
+    S1TypeTransforms = List.Transform(S1YearColumns, each {_, type number}),
+    S1Changed = Table.TransformColumnTypes(S1Typed, S1TypeTransforms),
+    S1Unpivoted = fnUnpivotYears(S1Changed, {"Scope 1 (tCO2-eq)"}, "Year", "Scope1"),
+    S1Final = Table.RenameColumns(S1Unpivoted,{{"Scope 1 (tCO2-eq)", "Business_Units"}}),
+    
+    // S2 History
+    S2Source = Excel.CurrentWorkbook(){[Name="S2.History"]}[Content],
+    S2Typed = Table.TransformColumnTypes(S2Source,{{"Scope 2 (tCO2-eq)", type text}}),
+    S2YearColumns = List.Select(Table.ColumnNames(S2Typed), each Text.StartsWith(_, "FY")),
+    S2TypeTransforms = List.Transform(S2YearColumns, each {_, type number}),
+    S2Changed = Table.TransformColumnTypes(S2Typed, S2TypeTransforms),
+    S2Unpivoted = fnUnpivotYears(S2Changed, {"Scope 2 (tCO2-eq)"}, "Year", "Scope2"),
+    S2Final = Table.RenameColumns(S2Unpivoted,{{"Scope 2 (tCO2-eq)", "Business_Units"}}),
+    
+    // Combine S1 and S2
+    CombinedScopes = Table.Combine({
+        Table.AddColumn(S1Final, "ScopeType", each "Scope1"),
+        Table.AddColumn(S2Final, "ScopeType", each "Scope2")
+    })
+in
+    CombinedScopes,
+
+// Consolidated S3 Data
+Base_S3Data = 
+let
+    // S3 Normaliser
+    S3NormSource = Excel.CurrentWorkbook(){[Name="S.3.Normaliser"]}[Content],
+    S3NormTyped = Table.TransformColumnTypes(S3NormSource,{
+        {"Region", type text}, {"Business_Units", type text}, {"Unit", type text}
+    }),
+    S3NormYearColumns = List.Select(Table.ColumnNames(S3NormTyped), each Text.StartsWith(_, "FY")),
+    S3NormTypeTransforms = List.Transform(S3NormYearColumns, each {_, type number}),
+    S3NormChanged = Table.TransformColumnTypes(S3NormTyped, S3NormTypeTransforms),
+    S3NormUnpivoted = fnUnpivotYears(S3NormChanged, {"Region", "Business_Units", "Unit"}, "Year", "Revenue"),
+    S3NormFiltered = Table.SelectRows(S3NormUnpivoted, each not List.Contains(
+        {"FY14", "FY15", "FY16", "FY17", "FY18", "FY19", "FY20"}, [Year])),
+    
+    // S3 Allocation
+    S3AllocSource = Excel.CurrentWorkbook(){[Name="S3.Allocation.W"]}[Content],
+    S3AllocTyped = Table.TransformColumnTypes(S3AllocSource,{
+        {"Region", type text}, {"Business_Units", type text}, 
+        {"GHG_Category", type text}, {"GHG_Category_Code", type text}
+    }),
+    S3AllocYearColumns = List.Select(Table.ColumnNames(S3AllocTyped), each Text.StartsWith(_, "FY")),
+    S3AllocTypeTransforms = List.Transform(S3AllocYearColumns, each {_, type number}),
+    S3AllocChanged = Table.TransformColumnTypes(S3AllocTyped, S3AllocTypeTransforms),
+    S3AllocUnpivoted = fnUnpivotYears(S3AllocChanged, 
+        {"Region", "Business_Units", "GHG_Category", "GHG_Category_Code"}, "Year", "Weighting_Factor"),
+    S3AllocFiltered = Table.SelectRows(S3AllocUnpivoted, each [Year] <> "FY20"),
+    
+    // Historical S3
+    S3HistSource = Excel.CurrentWorkbook(){[Name="Hist.S3"]}[Content],
+    S3HistTyped = Table.TransformColumnTypes(S3HistSource,{
+        {"C.IDs", type text}, {"Region", type text}, {"Categories", type text}
+    }),
+    S3HistYearColumns = List.Select(Table.ColumnNames(S3HistTyped), each Text.StartsWith(_, "FY")),
+    S3HistTypeTransforms = List.Transform(S3HistYearColumns, each {_, type number}),
+    S3HistChanged = Table.TransformColumnTypes(S3HistTyped, S3HistTypeTransforms),
+    S3HistUnpivoted = fnUnpivotYears(S3HistChanged, {"C.IDs", "Region", "Categories"}, "Year", "tCO2_e"),
+    
+    // Combine all S3 data
+    Result = Table.AddColumn(S3AllocFiltered, "S3_Data", each 
+        let
+            // Get normalizer data
+            NormData = Table.SelectRows(S3NormUnpivoted, 
+                (n) => n[Region] = [Region] and n[Business_Units] = [Business_Units] and n[Year] = [Year]),
+            Revenue = if Table.RowCount(NormData) > 0 then NormData[Revenue]{0} else null,
+            
+            // Get historical data
+            HistData = Table.SelectRows(S3HistUnpivoted, 
+                (h) => h[Region] = [Region] and h[C.IDs] = [GHG_Category_Code] and h[Year] = [Year]),
+            HistValue = if Table.RowCount(HistData) > 0 then HistData[tCO2_e]{0} else null,
+            
+            // Calculate weighted values
+            NormalizedRevenue = if Revenue = null then null else Revenue * [Weighting_Factor],
+            WeightedEmissions = if HistValue = null then null else HistValue * [Weighting_Factor]
+        in
+            [Revenue = Revenue, NormalizedRevenue = NormalizedRevenue, 
+             HistoricalEmissions = HistValue, WeightedEmissions = WeightedEmissions])
+in
+    Result,
+
+// Consolidated Climate Decarb
+Base_ClimateDecarb = 
+let
+    Source = Excel.CurrentWorkbook(){[Name="Climat_Decarb"]}[Content],
+    ChangedType = Table.TransformColumnTypes(Source,{{"Year", Int64.Type}, {"Value", type number}}),
+    
+    // Calculate % change from 2020 baseline efficiently
+    Grouped = Table.Group(ChangedType, 
+        {"Model", "Scenario", "Region", "Indusry edited", "Unit"}, 
+        {{"Data", each 
+            let
+                currentTable = _,
+                base2020 = Table.SelectRows(currentTable, each [Year] = 2020),
+                baseValue = if Table.RowCount(base2020) > 0 then base2020[Value]{0} else null,
+                withPctChange = Table.AddColumn(currentTable, "PctChange", 
+                    each if baseValue = null then null else [Value]/baseValue)
+            in
+                withPctChange
+        }}),
+    
+    Expanded = Table.ExpandTableColumn(Grouped, "Data", {"Year", "Value", "PctChange"}, 
+        {"Year", "Value", "PctChange"}),
+    
+    Filtered = Table.SelectRows(Expanded, each 
+        not List.Contains({"Ammonia", "Chemicals"}, [Indusry edited]) and
+        List.Contains({"Current Policies", "Nationally Determined Contributions (NDCs)", "Net Zero 2050"}, [Scenario]) and
+        [Model] = "MESSAGEix-GLOBIOM 2.0-M-R12-NGFS"),
+    
+    CleanedScenario = Table.ReplaceValue(Filtered, "2?C", "2C", Replacer.ReplaceText, {"Scenario"}),
+    FinalResult = Table.RemoveColumns(CleanedScenario, {"Unit", "Value"})
+in
+    FinalResult,
+
+// Consolidated Material Library
+Base_MaterialLibrary = 
+let
+    Source = Excel.CurrentWorkbook(){[Name="Mat.Library"]}[Content],
+    RenamedColumns = Table.RenameColumns(Source,{{"GWP (kgCO2-e/FU)", "GWP_EC_FU"}}),
+    
+    FilteredSource = Table.SelectRows(RenamedColumns, each 
+        Text.Lower(Text.Trim([#"Include/Exclude"])) = "in." and
+        [Level] <> null and
+        Text.Trim([Level]) <> "" and
+        Text.Lower(Text.Trim([Level])) <> "plz select"),
+    
+    // Create year range efficiently
+    YearsList = List.Numbers(2021, 2040 - 2021 + 1),
+    UniqueCombos = Table.Distinct(FilteredSource[{Material Category, Level}]),
+    
+    // Cross join with years
+    WithYears = Table.AddColumn(UniqueCombos, "ImplementingYear", each YearsList),
+    ExpandedYears = Table.ExpandListColumn(WithYears, "ImplementingYear"),
+    
+    // Merge with original data and calculate averages
+    MergedData = Table.NestedJoin(ExpandedYears, {"Material Category", "Level"}, 
+        FilteredSource, {"Material Category", "Level"}, "DataRows", JoinKind.LeftOuter),
+    
+    ExpandedData = Table.ExpandTableColumn(MergedData, "DataRows", {"GWP_EC_FU", "Year"}, 
+        {"GWP_EC_FU", "DataYear"}),
+    
+    FilteredByYear = Table.SelectRows(ExpandedData, each [DataYear] <= [ImplementingYear]),
+    
+    GroupedAverages = Table.Group(FilteredByYear, 
+        {"ImplementingYear", "Material Category", "Level"}, 
+        {{"AvgGWP", each List.Average([GWP_EC_FU]), type nullable number}}),
+    
+    // Calculate baseline and percentage changes
+    BaselineValues = Table.SelectRows(GroupedAverages, each Text.Contains([Level], "LVL1")),
+    BaselineRenamed = Table.RenameColumns(
+        Table.RemoveColumns(BaselineValues, {"Level"}), {{"AvgGWP", "BaselineGWP"}}),
+    
+    WithBaseline = Table.NestedJoin(GroupedAverages, {"ImplementingYear", "Material Category"}, 
+        BaselineRenamed, {"ImplementingYear", "Material Category"}, "BaselineData", JoinKind.LeftOuter),
+    
+    ExpandedBaseline = Table.ExpandTableColumn(WithBaseline, "BaselineData", {"BaselineGWP"}, {"BaselineGWP"}),
+    
+    WithPctChange = Table.AddColumn(ExpandedBaseline, "PctChangeFromBaseline", 
+        each if [BaselineGWP] = null or [BaselineGWP] = 0 then null else [AvgGWP]/[BaselineGWP]),
+    
+    // Add additional metadata
+    WithMetadata = Table.AddColumn(WithPctChange, "S3_GHG_Category", each "Purchased Goods and Services"),
+    
+    // Add material mappings
+    DecarbTagMapping = #table({"Material", "Tag"}, {
+        {"Concrete - 40Mpa", "Cement"},
+        {"Reinforcement", "Steel"},
+        {"Structural Steel", "Steel"},
+        {"Glazing & Facade", "Non-ferrous metals"},
+        {"Engineered Timber", "Other"},
+        {"Other", "Other"},
+        {"Others", "Other"}
+    }),
+    
+    PrctShareMaterials = Excel.CurrentWorkbook(){[Name="Prct_Share_Materials"]}[Content],
+    
+    WithPercentages = Table.Join(WithMetadata, {"Material Category"}, 
+        PrctShareMaterials, {"Materials"}, JoinKind.LeftOuter),
+    
+    WithImpacts = Table.AddColumn(WithPercentages, "Mat_Initiatives_Impacts", 
+        each if [Ratio] = null then null else [Ratio] * [PctChangeFromBaseline]),
+    
+    WithTags = Table.Join(WithImpacts, {"Material Category"}, 
+        DecarbTagMapping, {"Material"}, JoinKind.LeftOuter),
+    
+    FinalResult = Table.AddColumn(WithTags, "Material_Key", each 
+        if [Material Category] = "Concrete - 40Mpa" then "CC"
+        else if [Material Category] = "Reinforcement" then "Reo"
+        else if [Material Category] = "Structural Steel" then "Sts"
+        else if [Material Category] = "Glazing & Facade" then "Fac"
+        else if [Material Category] = "Engineered Timber" then "Tim"
+        else [Material Category])
+in
+    FinalResult,
+
+// MAIN CALCULATION QUERIES
+// ==============================================
+
+// Consolidated S3 Reference Point
+Main_S3ReferencePoint = 
+let
+    Source = Base_S3Data,
+    
+    // Calculate reference emissions (historical + projected)
+    WithReferenceEmissions = Table.AddColumn(Source, "ReferenceEmissions", each
+        let
+            S3Data = [S3_Data],
+            WeightedEmissions = S3Data[WeightedEmissions],
+            
+            // Get projected emissions if historical not available
+            S3IntensityFactor = Excel.CurrentWorkbook(){[Name="S3.Intensity.Factor"]}[Content],
+            IntensityData = Table.SelectRows(S3IntensityFactor, 
+                (i) => i[Region] = [Region] and i[Business_Units] = [Business_Units] and 
+                       i[GHG_Category_Code] = [GHG_Category_Code]),
+            
+            ProjectedEmissions = if Table.RowCount(IntensityData) > 0 and S3Data[NormalizedRevenue] <> null
+                then S3Data[NormalizedRevenue] * IntensityData[S3_IntensityRatio]{0}
+                else null,
+            
+            FinalEmissions = if WeightedEmissions <> null then WeightedEmissions else ProjectedEmissions
+        in
+            FinalEmissions),
+    
+    CleanedData = Table.SelectRows(WithReferenceEmissions, each [ReferenceEmissions] <> null and [Year] <> "FY20")
+in
+    CleanedData,
+
+// Consolidated UI Analysis
+Main_UIAnalysis = 
+let
+    Source = Excel.CurrentWorkbook(){[Name="Input_Range"]}[Content],
+    FilteredRows = Table.SelectRows(Source, each [Column1] <> null),
+    PromotedHeaders = Table.PromoteHeaders(FilteredRows, [PromoteAllScalars=true]),
+    
+    ChangedType = Table.TransformColumnTypes(PromotedHeaders,{
+        {"Title", type text}, {"Item", Int64.Type}, {"Current Use", type text},
+        {"Coding.1", type text}, {"Alternative", type text},
+        {"% Changes", type number}, {"Rate of changes", type text},
+        {"Start Year", Int64.Type}
+    }),
+    
+    FilteredData = Table.SelectRows(ChangedType, each [Title] <> ""),
+    
+    // Separate Material and Design initiatives
+    MaterialInitiatives = Table.SelectRows(FilteredData, each List.Contains({
+        "Concrete (Baseline)", "Engineered Timber (Baseline)", 
+        "Glazing & Facade (Baseline)", "Steel Reinforcement (Baseline)", 
+        "Structural Steel (Baseline)"
+    }, [Current Use])),
+    
+    DesignInitiatives = Table.SelectRows(FilteredData, each not List.Contains({
+        "Concrete (Baseline)", "Engineered Timber (Baseline)", 
+        "Glazing & Facade (Baseline)", "Steel Reinforcement (Baseline)", 
+        "Structural Steel (Baseline)"
+    }, [Current Use])),
+    
+    // Process both types with year expansion and normalization
+    ProcessInitiatives = (inputTable as table) =>
+        let
+            WithAlternative = Table.AddColumn(inputTable, "Arrange_Alternative", 
+                each if [Alternative] = "No need" then [Coding.1] else Text.BeforeDelimiter([Alternative], ":")),
+            
+            WithYears = Table.AddColumn(WithAlternative, "Years", 
+                each List.Numbers([Start Year], 2040-[Start Year]+1)),
+            ExpandedYears = Table.ExpandListColumn(WithYears, "Years"),
+            
+            GroupedByYear = Table.Group(ExpandedYears, {"Coding.1", "Years"}, {
+                {"Total_Pct_Changes", each List.Sum([#"% Changes"]), type number},
+                {"All_Items", each _, type table}
+            }),
+            
+            ExpandedGroups = Table.ExpandTableColumn(GroupedByYear, "All_Items", 
+                {"Arrange_Alternative", "% Changes"}, {"Arrange_Alternative", "Pct_Changes"}),
+            
+            NormalizedValues = Table.AddColumn(ExpandedGroups, "Normalized_Pct",
+                each if [Total_Pct_Changes] >= 1 then [Pct_Changes]/[Total_Pct_Changes] else [Pct_Changes])
+        in
+            NormalizedValues,
+    
+    ProcessedMaterial = ProcessInitiatives(MaterialInitiatives),
+    ProcessedDesign = ProcessInitiatives(DesignInitiatives),
+    
+    // Merge with material library for material initiatives
+    MaterialWithLibrary = Table.NestedJoin(ProcessedMaterial, 
+        {"Coding.1", "Arrange_Alternative", "Years"}, 
+        Base_MaterialLibrary, {"Material_Key", "Level", "ImplementingYear"}, 
+        "MaterialLib", JoinKind.LeftOuter),
+    
+    MaterialExpanded = Table.ExpandTableColumn(MaterialWithLibrary, "MaterialLib", 
+        {"Material Category", "S3_GHG_Category", "Tag"}, 
+        {"Material_Category", "GHG_Category", "Decarb_Tag"}),
+    
+    MaterialFinal = Table.AddColumn(MaterialExpanded, "Reduction_Impact", 
+        each 1 - [Normalized_Pct]),
+    
+    // Process design initiatives with lean construction library
+    LeanConstLibrary = Excel.CurrentWorkbook(){[Name="Lean.Const.Library"]}[Content],
+    
+    DesignWithLibrary = Table.NestedJoin(ProcessedDesign, {"Coding.1"}, 
+        LeanConstLibrary, {"Key2"}, "LeanLib", JoinKind.LeftOuter),
+    
+    DesignExpanded = Table.ExpandTableColumn(DesignWithLibrary, "LeanLib", 
+        {"Avg reduction"}, {"Avg_Reduction"}),
+    
+    DesignFinal = Table.AddColumn(DesignExpanded, "Reduction_Impact", 
+        each [Normalized_Pct] * [Avg_Reduction]),
+    
+    // Combine results
+    CombinedResult = Table.Combine({
+        Table.AddColumn(MaterialFinal, "Initiative_Type", each "Material"),
+        Table.AddColumn(DesignFinal, "Initiative_Type", each "Design")
+    })
+in
+    CombinedResult,
+
+// FINAL OUTPUT QUERY
+// ==============================================
+
+Viz_GWP_Mat_UI_Decarb_Design_Summary = 
+let
+    // Start with S3 reference point data
+    S3Data = Main_S3ReferencePoint,
+    
+    // Add full year column
+    WithFullYear = Table.AddColumn(S3Data, "FullYear", 
+        each fnCreateFullYear([Year])),
+    
+    // Merge with material library baseline data
+    WithMaterials = Table.NestedJoin(WithFullYear, {"GHG_Category"}, 
+        Table.SelectRows(Base_MaterialLibrary, each [Level] = "LVL1" and [ImplementingYear] = 2025),
+        {"S3_GHG_Category"}, "MaterialData", JoinKind.LeftOuter),
+    
+    ExpandedMaterials = Table.ExpandTableColumn(WithMaterials, "MaterialData", 
+        {"Material Category", "Mat_Initiatives_Impacts", "Tag"}, 
+        {"Material_Category", "Material_Impact", "Decarb_Tag"}),
+    
+    // Calculate material impacts
+    WithMaterialImpacts = Table.AddColumn(ExpandedMaterials, "Material_GWP_Impact", 
+        each [ReferenceEmissions] * [Material_Impact]),
+    
+    WithMaterialReduction = Table.AddColumn(WithMaterialImpacts, "GWP_After_Material", 
+        each if [Material_GWP_Impact] = null then [ReferenceEmissions] 
+             else [ReferenceEmissions] + [Material_GWP_Impact]),
+    
+    // Merge with UI analysis for material initiatives
+    WithUIAnalysis = Table.NestedJoin(WithMaterialReduction, 
+        {"GHG_Category", "Decarb_Tag", "FullYear"}, 
+        Table.SelectRows(Main_UIAnalysis, each [Initiative_Type] = "Material"),
+        {"GHG_Category", "Decarb_Tag", "Years"}, "UIData", JoinKind.LeftOuter),
+    
+    ExpandedUI = Table.ExpandTableColumn(WithUIAnalysis, "UIData", 
+        {"Reduction_Impact"}, {"UI_Material_Impact"}),
+    
+    // Apply UI material reductions
+    WithUIReduction = Table.AddColumn(ExpandedUI, "GWP_After_Material_UI", 
+        each if [UI_Material_Impact] = null then [GWP_After_Material]
+             else [GWP_After_Material] * [UI_Material_Impact]),
+    
+    // Apply climate decarbonization factors
+    WithClimate = Table.NestedJoin(WithUIReduction, {"FullYear", "Decarb_Tag"}, 
+        Base_ClimateDecarb, {"Year", "Indusry edited"}, "ClimateData", JoinKind.LeftOuter),
+    
+    ExpandedClimate = Table.ExpandTableColumn(WithClimate, "ClimateData", 
+        {"Model", "Scenario", "PctChange"}, {"Model", "Scenario", "Climate_Factor"}),
+    
+    WithClimateImpact = Table.AddColumn(ExpandedClimate, "BAU_GWP_Decarb", 
+        each [ReferenceEmissions] * [Climate_Factor]),
+    
+    WithMaterialClimateImpact = Table.AddColumn(WithClimateImpact, "Mat_Inn_GWP_Decarb", 
+        each [GWP_After_Material_UI] * [Climate_Factor]),
+    
+    // Apply design initiatives
+    WithDesignUI = Table.NestedJoin(WithMaterialClimateImpact, {"FullYear"}, 
+        Table.SelectRows(Main_UIAnalysis, each [Initiative_Type] = "Design"),
+        {"Years"}, "DesignData", JoinKind.LeftOuter),
+    
+    ExpandedDesign = Table.ExpandTableColumn(WithDesignUI, "DesignData", 
+        {"Reduction_Impact"}, {"Design_Impact"}),
+    
+    WithDesignReduction = Table.AddColumn(ExpandedDesign, "Design_Reduction", 
+        each [Mat_Inn_GWP_Decarb] * [Design_Impact]),
+    
+    WithFinalGWP = Table.AddColumn(WithDesignReduction, "Mat_Des_Inn_GWP_Decarb", 
+        each if [Design_Reduction] = null then [Mat_Inn_GWP_Decarb] 
+             else [Mat_Inn_GWP_Decarb] - [Design_Reduction]),
+    
+    // Group final results
+    GroupedResults = Table.Group(WithFinalGWP, {"Model", "Scenario", "FullYear"}, {
+        {"BAU_GWP_Decarb", each List.Sum([BAU_GWP_Decarb]), type number},
+        {"Mat_Inn_GWP_Decarb", each List.Sum([Mat_Inn_GWP_Decarb]), type number},
+        {"Mat_Des_Inn_GWP_Decarb", each List.Sum([Mat_Des_Inn_GWP_Decarb]), type number}
+    }),
+    
+    // Filter out null scenarios and ensure data quality
+    FinalResult = Table.SelectRows(GroupedResults, each 
+        [Model] <> null and [Scenario] <> null and [FullYear] <> null)
+in
+    FinalResult
